@@ -105,6 +105,8 @@ Role permissions and resource ownership are separate authorization requirements.
 
 Platform ownership does not automatically grant unrestricted access to every user's private data.
 
+The concrete ownership, isolation, and deletion rules are recorded in ADR 0003. Account lifecycle and password recovery are recorded in ADR 0002, and audit visibility and retention in ADR 0004.
+
 ## 4. Component Responsibilities
 
 ### 4.1 xibra-api
@@ -303,7 +305,7 @@ A short-lived onboarding session must prevent concurrent or repeated invitation 
 
 Telegram identity must be linked through a trusted onboarding or account-linking workflow.
 
-The API must verify the bot service identity before accepting Telegram identity information.
+The API must verify the bot service identity before accepting Telegram identity information. The bot authenticates with HMAC-signed service requests; the implemented contract is documented in `docs/api/conventions.md` section 12.
 
 A Telegram identity must not be linked to multiple Xibra accounts.
 

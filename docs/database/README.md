@@ -57,6 +57,8 @@ Private user-owned records must have an explicit ownership relationship.
 - Define explicit sharing relationships if cross-user access is introduced.
 - Do not assume that a platform role grants unrestricted access to private records.
 
+The concrete conventions for user-owned tables, nested resources, policy enforcement, and cross-user responses are recorded in ADR 0003. Private records are always resolved through the authenticated user's relationship; a request for another user's record returns `404` rather than `403` so private record existence does not leak.
+
 ### 4.2 Shared and System Data
 
 Not every record requires a `user_id`.
@@ -66,8 +68,25 @@ Shared reference data, platform configuration, and system-level records may be g
 Each table must have a clearly documented ownership model:
 
 - User-owned.
-- Shared.
+- Shared reference.
 - System-managed.
+
+The current tables are classified as follows. A new table must be added to this list in the same change that introduces it.
+
+| Table | Classification | Ownership / access rule |
+|---|---|---|
+| `users` | System-managed | Identity record. A user can read their own profile; profile update, when added, is scoped to the same user. Lifecycle changes require `users.manage` (ADR 0002). |
+| `roles` | Shared reference | Global role catalog. |
+| `permissions` | Shared reference | Global permission catalog. |
+| `role_user` | Shared reference | User-role assignment pivot. |
+| `permission_role` | Shared reference | Role-permission assignment pivot. |
+| `invitations` | System-managed | Owner-created and Owner-managed; the invitee does not own the record. |
+| `onboarding_sessions` | System-managed | Short-lived, owned by the invitation it was opened for. |
+| `onboarding_attempts` | System-managed | Append-only security history; Owner-only read (ADR 0004). |
+| `audit_logs` | System-managed | Append-only audit history; Owner or self-scoped read (ADR 0004). |
+| `telegram_identities` | User-owned | One row per linked account; access only through the owning user. |
+| `telegram_link_codes` | User-owned | One active code per account; access only through the owning user. |
+| `personal_access_tokens` | User-owned | Polymorphic tokens; access only through the owning tokenable user. |
 
 Do not introduce ambiguous ownership behavior.
 
@@ -181,6 +200,144 @@ Seeders must not contain committed production passwords or reusable authenticati
 
 Initial Owner provisioning must not silently create duplicate accounts or grant unintended privileges.
 
+### 7.5 Core Multi-User ERD
+
+The current core schema is summarized below. It covers identity, authorization, invitation, onboarding, Telegram linking, audit, and token storage. Future domain tables use the ownership rules in section 4 and ADR 0003.
+
+```mermaid
+erDiagram
+    users {
+        bigint id PK
+        string name
+        string username UK
+        string email UK "nullable"
+        string phone UK "nullable"
+        string password
+        boolean is_active
+        timestamp last_login_at "nullable"
+    }
+
+    roles {
+        bigint id PK
+        string name UK
+        string label
+        boolean is_system
+    }
+
+    permissions {
+        bigint id PK
+        string name UK
+        string label
+    }
+
+    role_user {
+        bigint user_id PK, FK
+        bigint role_id PK, FK
+        bigint assigned_by FK "nullable"
+    }
+
+    permission_role {
+        bigint permission_id PK, FK
+        bigint role_id PK, FK
+    }
+
+    invitations {
+        bigint id PK
+        bigint created_by FK
+        bigint role_id FK
+        text note "nullable"
+        string code_hash UK
+        string token_hash UK
+        string status
+        timestamp expires_at
+        timestamp redeemed_at "nullable"
+        bigint redeemed_by FK "nullable"
+        timestamp revoked_at "nullable"
+        bigint revoked_by FK "nullable"
+    }
+
+    onboarding_sessions {
+        bigint id PK
+        bigint invitation_id FK
+        string token_hash UK
+        timestamp expires_at
+        timestamp consumed_at "nullable"
+        string ip_address "nullable"
+        text user_agent "nullable"
+    }
+
+    onboarding_attempts {
+        bigint id PK
+        bigint invitation_id FK "nullable"
+        string outcome
+        string response_code
+        string ip_address "nullable"
+        text user_agent "nullable"
+    }
+
+    telegram_identities {
+        bigint id PK
+        bigint user_id FK, UK
+        bigint telegram_user_id UK
+        string telegram_username "nullable"
+        timestamp verified_at
+    }
+
+    telegram_link_codes {
+        bigint id PK
+        bigint user_id FK
+        string code_hash UK
+        timestamp expires_at
+        timestamp consumed_at "nullable"
+    }
+
+    audit_logs {
+        bigint id PK
+        bigint user_id FK "nullable"
+        string actor_type
+        string action
+        string subject_type "nullable"
+        bigint subject_id "nullable"
+        jsonb properties "nullable"
+        string ip_address "nullable"
+        text user_agent "nullable"
+    }
+
+    personal_access_tokens {
+        bigint id PK
+        string tokenable_type
+        bigint tokenable_id
+        string name
+        string token UK
+        jsonb abilities "nullable"
+        timestamp last_used_at "nullable"
+        timestamp expires_at "nullable"
+    }
+
+    users ||--o{ role_user : "assigned role"
+    roles ||--o{ role_user : "assigned to"
+    roles ||--o{ permission_role : "grants"
+    permissions ||--o{ permission_role : "granted by"
+    users ||--o{ invitations : "created_by"
+    users |o--o{ invitations : "redeemed_by"
+    users |o--o{ invitations : "revoked_by"
+    roles ||--o{ invitations : "role_id"
+    invitations ||--o{ onboarding_sessions : "invitation_id"
+    invitations |o--o{ onboarding_attempts : "invitation_id"
+    users ||--o| telegram_identities : "user_id"
+    users ||--o{ telegram_link_codes : "user_id"
+    users |o--o{ audit_logs : "user_id"
+    users ||--o{ personal_access_tokens : "tokenable (polymorphic)"
+```
+
+Notes:
+
+- `personal_access_tokens` uses a polymorphic `tokenable` relationship; in practice the tokenable is always a `User` for API tokens.
+- `onboarding_attempts.invitation_id` is nullable because an unknown secret or session token cannot be attributed to an invitation. Attempts survive invitation deletion.
+- `audit_logs.user_id` is nullable so service and system actions without a specific user can be recorded.
+- `role_user.assigned_by` references the user who made the assignment.
+- The full invitation secret lifecycle is normalized into hashes; raw codes and link tokens are never stored.
+
 ## 8. Seeders
 
 Seeders provide controlled initial and reference data.
@@ -271,7 +428,7 @@ Depending on the operation, records may include:
 
 Audit records must not contain passwords, access tokens, raw invitation secrets, or other sensitive credentials.
 
-Audit retention and access rules must be defined before implementation.
+Audit retention and access rules are defined in ADR 0004: onboarding attempts are retained for 90 days, audit logs for 365 days, and reads are either Owner-wide or scoped to the authenticated user's own records. Retention is enforced by a scheduled prune command.
 
 ## 13. Deletion and Data Retention
 
@@ -290,6 +447,8 @@ The design must distinguish between:
 Deleting a user must not accidentally destroy records that must legally or operationally be retained.
 
 Data retention policies must be documented before production implementation.
+
+v1 uses account deactivation rather than deletion (ADR 0002). There is no user or aggregate delete endpoint. All ownership foreign keys have deliberate deletion behavior; retained records use `restrictOnDelete`, and only records that cannot exist independently use `cascadeOnDelete`. A future deletion or anonymization procedure must be recorded as its own decision before any endpoint is added.
 
 ## 14. Database Security
 

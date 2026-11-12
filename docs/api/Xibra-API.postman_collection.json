@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a3f7c2e1-4b6d-4e8a-9c2f-xibra-api-batch4",
     "name": "Xibra Platform API",
-    "description": "Postman collection for the verified endpoints of **xibra-api** (Batches 1–5): health, authentication, Owner-only invitation management, and public invitation onboarding.\n\n## Setup\n\n1. Start the API: `php artisan serve` inside `D:\\Xibra-Platform\\xibra-api` (default base URL `http://127.0.0.1:8000`).\n2. In this collection's **Variables** tab, set `owner_password` to the value of `XIBRA_OWNER_PASSWORD` from `xibra-api/.env`.\n3. Run the collection in order (Collection Runner) — later requests depend on variables captured by earlier ones:\n   - `POST /auth/login` captures `access_token`\n   - `POST /invitations` captures `invitation_id`, `invitation_code`, `invitation_token`\n   - `POST /invitations/redeem` captures `onboarding_session_token`\n   - `POST /onboarding/complete` captures `onboarding_member_token` and `member_access_token`\n\n## Notes\n\n- The response contract for every endpoint is `{success, message, code, data, meta}` (`docs/api/conventions.md` §5). Clients should branch on `code`, not `message`.\n- A full run **creates one real invitation and revokes it** in the Invitations folder. The Onboarding folder **creates one real Member account and one redeemed invitation**; nothing is deleted. Skip the Onboarding folder if you do not want additional live accounts.\n- The Onboarding complete request derives a unique username and email per run (`member_<timestamp>`), so repeated runs do not collide.\n- Login rate limiting (5/min per identifier, 20/min per IP) and onboarding rate limiting (10/min per IP) are intentionally **not** exercised: triggering them would lock the run for a minute.\n- The member-forbidden check (403) uses the `member_access_token` captured by the Onboarding folder. If that folder is skipped, the variable is empty and the check gracefully falls back to asserting 401 UNAUTHENTICATED.\n- Invitation codes and tokens are returned exactly once, in the create response. The API stores only hashes.\n- All requests send `Content-Type: application/json` and expect JSON responses regardless of the Accept header.",
+    "description": "Postman collection for the verified endpoints of **xibra-api** (Batches 1-6): health, authentication, Owner-only invitation management, public invitation onboarding, and Telegram identity linking.\n\n## Setup\n\n1. Start the API: `php artisan serve` inside `D:\\Xibra-Platform\\xibra-api` (default base URL `http://127.0.0.1:8000`).\n2. In this collection's **Variables** tab, set `owner_password` to the value of `XIBRA_OWNER_PASSWORD` from `xibra-api/.env`.\n3. Run the collection in order (Collection Runner) - later requests depend on variables captured by earlier ones:\n   - `POST /auth/login` captures `access_token`\n   - `POST /invitations` captures `invitation_id`, `invitation_code`, `invitation_token`\n   - `POST /invitations/redeem` captures `onboarding_session_token`\n   - `POST /onboarding/complete` captures `onboarding_member_token` and `member_access_token`\n   - `POST /telegram/link-codes` captures `telegram_link_code`; signed bot requests build their signature in a pre-request script\n4. Set `bot_secret` to `XIBRA_BOT_SECRET` from `xibra-api/.env`. `bot_key_id` must match `XIBRA_BOT_KEY_ID` (default `xibra-bot-v1`).\n\n## Notes\n\n- The response contract for every endpoint is `{success, message, code, data, meta}` (`docs/api/conventions.md` 5). Clients should branch on `code`, not `message`.\n- A full run **creates one real invitation and revokes it** in the Invitations folder. The Onboarding folder **creates one real Member account and one redeemed invitation**; nothing is deleted. Skip the Onboarding folder if you do not want additional live accounts.\n- The Onboarding complete request derives a unique username and email per run (`member_<timestamp>`), so repeated runs do not collide.\n- The Telegram folder unlinks first, links a random test Telegram ID to the authenticated account, then unlinks again. It is repeatable and leaves no linked identity behind.\n- `bot_secret` is a live credential. Never export, share, or commit the collection while it is filled in.\n- Login rate limiting (5/min per identifier, 20/min per IP) and onboarding rate limiting (10/min per IP) are intentionally **not** exercised: triggering them would lock the run for a minute.\n- The member-forbidden check (403) uses the `member_access_token` captured by the Onboarding folder. If that folder is skipped, the variable is empty and the check gracefully falls back to asserting 401 UNAUTHENTICATED.\n- Invitation codes and tokens are returned exactly once, in the create response. The API stores only hashes.\n- All requests send `Content-Type: application/json` and expect JSON responses regardless of the Accept header.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -89,6 +89,31 @@
     {
       "value": "Xibra-Onboarding-2026",
       "key": "onboarding_password",
+      "type": "string"
+    },
+    {
+      "key": "bot_key_id",
+      "value": "xibra-bot-v1",
+      "type": "string"
+    },
+    {
+      "key": "bot_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "telegram_test_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "telegram_test_username",
+      "value": "@xibra_e2e",
+      "type": "string"
+    },
+    {
+      "key": "telegram_link_code",
+      "value": "",
       "type": "string"
     }
   ],
@@ -936,6 +961,350 @@
                   "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
                   "pm.test(\"code is NOT_FOUND\", () => pm.expect(res.code).to.eql(\"NOT_FOUND\"));",
                   "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Telegram linking",
+      "item": [
+        {
+          "name": "DELETE /api/v1/telegram (cleanup)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram",
+            "description": "Removes any Telegram link left by an earlier run so the folder is repeatable, and generates a fresh random Telegram user ID for the run. Uses the collection bearer token (Owner by default). A missing link is not an error."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('telegram_test_user_id', String(900000000 + Math.floor(Math.random() * 99999999)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200 or 404\", () => pm.expect([200, 404]).to.include(pm.response.code));",
+                  "pm.test(\"link state is cleared\", () => pm.expect([\"TELEGRAM_UNLINKED\", \"TELEGRAM_NOT_LINKED\"]).to.include(res.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/telegram/link-codes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram/link-codes",
+            "description": "Issues a one-time 10-minute link code for the authenticated user. The plain code is returned once; only its HMAC hash is stored. Issuing a new code expires the previous one. Rate limited to 5/min per user. Expects HTTP 201 with code TELEGRAM_LINK_CODE_ISSUED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is TELEGRAM_LINK_CODE_ISSUED\", () => pm.expect(res.code).to.eql(\"TELEGRAM_LINK_CODE_ISSUED\"));",
+                  "pm.test(\"code uses the unambiguous display format\", () => pm.expect(res.data.code).to.match(/^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/));",
+                  "pm.test(\"expiry matches the 10 minute policy\", () => pm.expect(res.data.expires_in_seconds).to.eql(600));",
+                  "",
+                  "pm.collectionVariables.set('telegram_link_code', res.data.code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/telegram (before link)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram",
+            "description": "The authenticated user's own link state before linking. Expects HTTP 200 with linked=false and no identity."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is TELEGRAM_STATUS_RETRIEVED\", () => pm.expect(res.code).to.eql(\"TELEGRAM_STATUS_RETRIEVED\"));",
+                  "pm.test(\"no link yet\", () => {",
+                  "    pm.expect(res.data.linked).to.eql(false);",
+                  "    pm.expect(res.data.identity).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/bot/telegram/link (signed)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{telegram_link_code}}\",\n  \"telegram_user_id\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/bot/telegram/link",
+            "description": "Trusted bot endpoint. The pre-request script signs the exact body with HMAC-SHA256 (method, path, timestamp, nonce, body hash) using bot_secret. The telegram_user_id is trusted because the request is signed by the bot. Expects HTTP 201 with code TELEGRAM_LINKED."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "",
+                  "const code = pm.collectionVariables.get('telegram_link_code');",
+                  "const telegramUserId = Number(pm.collectionVariables.get('telegram_test_user_id'));",
+                  "const body = JSON.stringify({ code: code, telegram_user_id: telegramUserId, telegram_username: pm.collectionVariables.get('telegram_test_username') });",
+                  "",
+                  "pm.request.body.update(body);",
+                  "",
+                  "const timestamp = Math.floor(Date.now() / 1000).toString();",
+                  "const nonce = CryptoJS.lib.WordArray.random(16).toString();",
+                  "const path = pm.request.url.getPathWithQuery();",
+                  "const canonical = ['POST', path, timestamp, nonce, CryptoJS.SHA256(body).toString()].join('\\n');",
+                  "const signature = CryptoJS.HmacSHA256(canonical, pm.collectionVariables.get('bot_secret')).toString(CryptoJS.enc.Hex);",
+                  "",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Key-Id', value: pm.collectionVariables.get('bot_key_id') });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Timestamp', value: timestamp });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Signature', value: signature });",
+                  "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is TELEGRAM_LINKED\", () => pm.expect(res.code).to.eql(\"TELEGRAM_LINKED\"));",
+                  "pm.test(\"the signed Telegram ID is linked\", () => pm.expect(res.data.identity.telegram_user_id).to.eql(Number(pm.collectionVariables.get(\"telegram_test_user_id\"))));",
+                  "pm.test(\"the username is stored without the @ prefix\", () => pm.expect(res.data.identity.telegram_username).to.eql(\"xibra_e2e\"));",
+                  "pm.test(\"the code owner is the authenticated account\", () => pm.expect(res.data.user.username).to.eql(pm.collectionVariables.get(\"owner_username\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/bot/telegram/link (unsigned, rejected)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/bot/telegram/link",
+            "description": "Proves that service endpoints require the HMAC signature, not a user token or an open route. Expects HTTP 401 with code SERVICE_UNAUTHENTICATED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code is SERVICE_UNAUTHENTICATED\", () => pm.expect(res.code).to.eql(\"SERVICE_UNAUTHENTICATED\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/bot/telegram/link (reused code)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{telegram_link_code}}\",\n  \"telegram_user_id\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/bot/telegram/link",
+            "description": "Replays the already consumed code with a different Telegram ID. Signed, but the code is single-use. Expects HTTP 409 with code TELEGRAM_LINK_CODE_CONSUMED. This also counts as one failed attempt against the per-Telegram throttle."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "",
+                  "const code = pm.collectionVariables.get('telegram_link_code');",
+                  "const telegramUserId = Number(pm.collectionVariables.get('telegram_test_user_id')) + 1;",
+                  "const body = JSON.stringify({ code: code, telegram_user_id: telegramUserId });",
+                  "",
+                  "pm.request.body.update(body);",
+                  "",
+                  "const timestamp = Math.floor(Date.now() / 1000).toString();",
+                  "const nonce = CryptoJS.lib.WordArray.random(16).toString();",
+                  "const path = pm.request.url.getPathWithQuery();",
+                  "const canonical = ['POST', path, timestamp, nonce, CryptoJS.SHA256(body).toString()].join('\\n');",
+                  "const signature = CryptoJS.HmacSHA256(canonical, pm.collectionVariables.get('bot_secret')).toString(CryptoJS.enc.Hex);",
+                  "",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Key-Id', value: pm.collectionVariables.get('bot_key_id') });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Timestamp', value: timestamp });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Nonce', value: nonce });",
+                  "pm.request.headers.upsert({ key: 'X-Xibra-Signature', value: signature });",
+                  "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"code is TELEGRAM_LINK_CODE_CONSUMED\", () => pm.expect(res.code).to.eql(\"TELEGRAM_LINK_CODE_CONSUMED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/telegram (after link)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram",
+            "description": "Confirms the authenticated account sees only its own link and the normalized Telegram handle. Expects HTTP 200 with linked=true."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the link is visible\", () => pm.expect(res.data.linked).to.eql(true));",
+                  "pm.test(\"the identity matches the signed request\", () => pm.expect(res.data.identity.telegram_user_id).to.eql(Number(pm.collectionVariables.get(\"telegram_test_user_id\"))));",
+                  "pm.test(\"the stored handle is normalized\", () => pm.expect(res.data.identity.telegram_username).to.eql(\"xibra_e2e\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/v1/telegram",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram",
+            "description": "Removes the authenticated account link and records a telegram.unlinked audit event. Expects HTTP 200 with code TELEGRAM_UNLINKED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is TELEGRAM_UNLINKED\", () => pm.expect(res.code).to.eql(\"TELEGRAM_UNLINKED\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/telegram (after unlink)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/telegram",
+            "description": "Confirms the link was removed. Expects HTTP 200 with linked=false and identity=null."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the link is gone\", () => {",
+                  "    pm.expect(res.data.linked).to.eql(false);",
+                  "    pm.expect(res.data.identity).to.eql(null);",
+                  "});"
                 ]
               }
             }

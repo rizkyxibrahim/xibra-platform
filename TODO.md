@@ -29,9 +29,9 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Create the database documentation.
 - [x] Record the initial architecture decision.
 - [ ] Audit and align all workspace documentation with the multi-user architecture.
-- [ ] Review the invitation-only onboarding specification.
-- [ ] Finalize the initial multi-user architecture documentation.
-- [ ] Finalize the Core Multi-User ERD.
+- [x] Review the invitation-only onboarding specification.
+- [x] Finalize the initial multi-user architecture documentation.
+- [x] Finalize the Core Multi-User ERD.
 
 ### Development Environment
 
@@ -77,29 +77,29 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Establish API versioning conventions.
 - [x] Finalize the standard JSON response format.
 - [x] Review exception handling.
-- [ ] Review CORS configuration.
+- [x] Review CORS configuration.
 - [x] Verify the health endpoint.
 - [x] Verify the API foundation with automated tests.
 
 ### Core Multi-User Architecture
 
-- [ ] Finalize the Core Multi-User ERD.
+- [x] Finalize the Core Multi-User ERD.
 - [x] Review existing Laravel migrations and database tables.
-- [ ] Define the user identity and account model.
-- [ ] Define username, email, and phone login identifiers.
-- [ ] Define the initial Owner provisioning process.
-- [ ] Define the initial Member role.
-- [ ] Design roles and permissions.
-- [ ] Design user ownership relationships.
-- [ ] Define data isolation requirements.
-- [ ] Design the account lifecycle.
-- [ ] Define account activation and deactivation behavior.
-- [ ] Review password recovery requirements.
-- [ ] Record approved architecture decisions.
+- [x] Define the user identity and account model.
+- [x] Define username, email, and phone login identifiers.
+- [x] Define the initial Owner provisioning process.
+- [x] Define the initial Member role.
+- [x] Design roles and permissions.
+- [x] Design user ownership relationships.
+- [x] Define data isolation requirements.
+- [x] Design the account lifecycle.
+- [x] Define account activation and deactivation behavior.
+- [x] Review password recovery requirements.
+- [x] Record approved architecture decisions.
 
 ### Database Implementation
 
-- [ ] Design the initial multi-user database schema.
+- [x] Design the initial multi-user database schema.
 - [x] Create new migrations without modifying applied migrations unnecessarily.
 - [x] Extend the users table with approved identity fields.
 - [x] Create roles and permissions tables.
@@ -107,8 +107,8 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Create initial reference seeders.
 - [x] Implement controlled Owner provisioning.
 - [x] Create the initial Member role seeder.
-- [ ] Review foreign keys and indexes.
-- [ ] Verify clean migration and seeding.
+- [x] Review foreign keys and indexes.
+- [x] Verify clean migration and seeding.
 - [ ] Verify existing database data is protected.
 
 ### Authentication and Authorization
@@ -120,10 +120,15 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Implement authentication middleware.
 - [x] Implement role-based authorization.
 - [x] Implement permission checks.
+- [ ] Implement account deactivation and reactivation (ADR 0002).
+- [ ] Implement Owner-only user administration listing.
 - [ ] Implement resource ownership policies.
 - [ ] Prevent unauthorized ownership reassignment.
 - [x] Implement login rate limiting.
+- [ ] Implement email verification for optional email addresses.
 - [ ] Implement secure password recovery.
+- [ ] Implement audit and onboarding-attempt read endpoints (ADR 0004).
+- [ ] Design and implement Google OAuth connection foundation.
 - [ ] Test authentication and authorization boundaries.
 
 ### API Quality
@@ -135,7 +140,7 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Add authentication tests.
 - [x] Add authorization tests.
 - [ ] Add multi-user ownership isolation tests.
-- [ ] Configure Laravel Pint.
+- [x] Configure Laravel Pint.
 - [ ] Document API endpoint contracts.
 - [ ] Verify the API foundation.
 
@@ -182,14 +187,16 @@ A documented requirement is not considered implemented until the corresponding c
 
 ### Telegram Identity Linking
 
-- [ ] Define the bot-to-API authentication mechanism.
-- [ ] Implement authenticated bot service requests.
-- [ ] Validate trusted Telegram numeric user IDs.
-- [ ] Design Telegram account linking.
-- [ ] Prevent duplicate Telegram identity linking.
-- [ ] Implement Telegram account linking and unlinking.
-- [ ] Require existing account verification before linking.
-- [ ] Test Telegram identity ownership and isolation.
+- [x] Define the bot-to-API authentication mechanism.
+- [x] Implement authenticated bot service requests.
+- [x] Validate trusted Telegram numeric user IDs.
+- [x] Design Telegram account linking.
+- [x] Prevent duplicate Telegram identity linking.
+- [x] Implement Telegram account linking and unlinking.
+- [x] Require existing account verification before linking.
+- [x] Test Telegram identity ownership and isolation.
+- [x] Document the Telegram service authentication and linking contract in `docs/api/conventions.md`.
+- [x] Add the Telegram identity linking requests to the Postman collection.
 
 ---
 
@@ -520,15 +527,14 @@ A documented requirement is not considered implemented until the corresponding c
 
 ## Current Development Focus
 
-**Phase 2 — Invitation and Account Onboarding**
+**Phase 1–2 completion — account lifecycle, password recovery, and audit access**
 
 Current priorities:
 
-1. Define the bot-to-API service authentication mechanism.
-2. Implement Telegram identity linking with per-user isolation.
-3. Add resource ownership policies and isolation tests.
-4. Document the implemented API endpoint contracts.
-5. Review foreign keys, indexes, and clean migration/seeding verification.
+1. Implement Owner-only account deactivation and reactivation, email verification, and the password reset flow (ADR 0002).
+2. Implement the Owner-wide and self-scoped audit endpoints and the retention prune command (ADR 0004).
+3. Implement the first owned resource with ownership policies and isolation tests (ADR 0003).
+4. Document the remaining implemented API endpoint contracts.
 
 Do not begin dependent application feature development until the central identity, authentication, authorization, ownership, and onboarding foundations are sufficiently defined and verified.
 

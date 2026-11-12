@@ -106,15 +106,14 @@ Endpoints or operations intended for authenticated application services.
 
 Examples may include:
 
-    POST /api/v1/integrations/telegram/updates
-    POST /api/v1/integrations/telegram/link
+    POST /api/v1/bot/telegram/link
     POST /api/v1/integrations/assistant/actions
 
 Service endpoints must validate the calling service identity.
 
 Service authentication must not automatically grant access to private user resources.
 
-The exact service authentication mechanism must be documented before implementation.
+The implemented bot service mechanism (HMAC-signed requests) is documented in section 12. Service credentials must never authenticate user endpoints, and user tokens must never authenticate service endpoints.
 
 ## 4. HTTP Methods
 
@@ -235,7 +234,7 @@ Email addresses and usernames must follow the platform's normalization rules.
 
 Phone numbers must use a consistent international format.
 
-Service-to-service authentication is separate from ordinary user authentication and must be explicitly defined.
+Service-to-service authentication is separate from ordinary user authentication and must be explicitly defined. The bot service contract is defined in section 12.
 
 ## 8. Authorization and Data Ownership
 
@@ -261,6 +260,12 @@ The platform Owner must not automatically receive unrestricted access to all pri
 All authorization checks must occur on the backend.
 
 Frontend route guards and hidden UI elements are not security boundaries.
+
+The concrete ownership and isolation rules are recorded in ADR 0003. In particular:
+
+- Private records are resolved through the authenticated user's relationship, never from a client-supplied ownership identifier.
+- A request for another user's private record returns `404`, not `403`, so record existence does not leak.
+- The Owner role does not bypass private-resource ownership. Owner administration uses separate permission-gated endpoints.
 
 ## 9. Validation
 
@@ -345,7 +350,99 @@ Passwords must never be collected through Telegram.
 
 Account password setup must occur through a secure HTTPS onboarding flow.
 
-## 12. Sensitive Operations and Approval
+Password recovery is defined in ADR 0002: self-service email reset for verified addresses, plus a single-use operator-issued reset link for accounts without a usable email. Passwords are never set, shared, or communicated by the Owner.
+
+## 12. Telegram Identity Linking
+
+Telegram identity is linked to an existing Xibra account; it never creates or authenticates an account on its own.
+
+### 12.1 Bot Service Authentication
+
+The Telegram bot authenticates as a trusted service, separately from user authentication, using HMAC-signed requests.
+
+Every bot request must send:
+
+| Header | Value |
+|---|---|
+| `X-Xibra-Key-Id` | Configured service key identifier |
+| `X-Xibra-Timestamp` | Unix time in seconds |
+| `X-Xibra-Nonce` | 16-64 URL-safe characters (`A-Z`, `a-z`, `0-9`, `_`, `-`) |
+| `X-Xibra-Signature` | Lowercase hex HMAC-SHA256 of the canonical string |
+
+The canonical string is the following values joined with `\n`:
+
+```
+METHOD
+REQUEST_URI (path plus query string)
+TIMESTAMP
+NONCE
+SHA256(raw request body) as lowercase hex
+```
+
+The API rejects a request when:
+
+- The key identifier does not match.
+- The timestamp is more than 300 seconds away from server time.
+- The nonce was already used within its 600-second retention window.
+- The signature does not match.
+- Either credential is not configured (the service fails closed; the secret must be at least 32 characters).
+
+All failures return `401` with code `SERVICE_UNAUTHENTICATED` and an identical message, so the response never reveals which check failed. A nonce is consumed only after a valid signature, and the bot rate limit runs before signature verification so unsigned traffic is rejected cheaply.
+
+The mechanism is configured through `XIBRA_BOT_KEY_ID` and `XIBRA_BOT_SECRET`; the shared secret must be generated with a CSPRNG, stored outside source control, and rotated by changing both values together. `XIBRA_BOT_RATE_LIMIT_PER_MINUTE` controls the per-address bot limit (default 120).
+
+Bot service endpoints are versioned like every other endpoint and are rate-limited. They do not accept Sanctum tokens, and user tokens cannot call them.
+
+### 12.2 Account Linking
+
+Linking requires proof of both sides:
+
+1. An authenticated, active user requests a one-time link code with `POST /api/v1/telegram/link-codes`.
+2. The user sends the code to the Telegram bot.
+3. The bot submits the code and the numeric Telegram user ID from the verified Telegram update to `POST /api/v1/bot/telegram/link` using a signed service request.
+
+Link codes:
+
+| Property | Rule |
+|---|---|
+| Format | 10 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, displayed as `ABCDE-FGHJK` |
+| Matching | Case-insensitive; dashes, spaces, and other punctuation are ignored |
+| Lifetime | 10 minutes |
+| Storage | HMAC-SHA256 hash only; the plain code is returned once |
+| Active codes | One per user; issuing a new code expires the previous one |
+| Issuance limit | 5 requests per minute per user |
+
+Only the numeric Telegram user ID is authoritative. Telegram usernames are display metadata, are optional, are normalized without `@`, and must match `[A-Za-z0-9_]{5,32}`; they are never treated as proof of identity.
+
+A Telegram identity belongs to exactly one user and a user has at most one Telegram identity. Both rules are enforced by database unique constraints and translated to `409` responses. A deactivated account cannot issue codes, and a code owned by a deactivated account is reported exactly like an unknown code.
+
+Unlinking removes the database link and records an audit event; a later link starts a new identity record.
+
+### 12.3 Endpoints
+
+| Method | Path | Authentication | Purpose |
+|---|---|---|---|
+| `POST` | `/api/v1/telegram/link-codes` | User token | Issue a one-time link code |
+| `GET` | `/api/v1/telegram` | User token | Read the caller's own link status |
+| `DELETE` | `/api/v1/telegram` | User token | Remove the caller's own link |
+| `POST` | `/api/v1/bot/telegram/link` | Bot service signature | Link the code's owner to a Telegram user ID |
+
+User endpoints only ever read or modify the authenticated caller's identity; no identifier is accepted from the request body.
+
+### 12.4 Error Codes
+
+| Code | Status | Meaning |
+|---|---|---|
+| `SERVICE_UNAUTHENTICATED` | 401 | Bot signature, key, timestamp, nonce, or configuration invalid |
+| `TELEGRAM_LINK_CODE_INVALID` | 404 | Unknown code, or code owned by a deactivated account |
+| `TELEGRAM_LINK_CODE_EXPIRED` | 409 | Code expired or was replaced by a newer code |
+| `TELEGRAM_LINK_CODE_CONSUMED` | 409 | Code already used |
+| `TELEGRAM_ALREADY_LINKED` | 409 | The account already has a Telegram identity |
+| `TELEGRAM_ACCOUNT_IN_USE` | 409 | The Telegram identity is linked to another account |
+| `TELEGRAM_NOT_LINKED` | 404 | Unlink requested without an existing link |
+| `TELEGRAM_LINK_THROTTLED` | 429 | Too many failed code attempts for that Telegram account |
+
+## 13. Sensitive Operations and Approval
 
 Sensitive operations must follow explicit approval requirements.
 
@@ -363,7 +460,9 @@ The API must validate the approval state before executing the operation.
 
 Approval must be associated with the correct authenticated user and intended operation.
 
-## 13. Pagination, Filtering, and Sorting
+Account lifecycle changes, password reset issuance, and audit access are privileged operations. Their authorization and retention rules are recorded in ADR 0002 and ADR 0004.
+
+## 14. Pagination, Filtering, and Sorting
 
 Collection endpoints should use predictable query parameters.
 
@@ -385,7 +484,7 @@ The API must:
 
 Each resource may define additional filters when required.
 
-## 14. Error Handling
+## 15. Error Handling
 
 - Use stable response codes.
 - Return safe and useful error messages.
@@ -398,7 +497,7 @@ Each resource may define additional filters when required.
 
 Unexpected exceptions must be handled centrally.
 
-## 15. API Documentation and Testing
+## 16. API Documentation and Testing
 
 Every implemented endpoint should have:
 
@@ -423,7 +522,9 @@ Tests for private endpoints must include:
 
 Invitation and onboarding tests must cover expiration, revocation, repeated redemption, and concurrent redemption behavior where applicable.
 
-## 16. Compatibility
+Telegram linking tests must cover signed and unsigned service requests, replay, code expiration and reuse, duplicate identities, and cross-user isolation.
+
+## 17. Compatibility
 
 All API clients must follow the documented contract.
 
@@ -438,7 +539,7 @@ Breaking changes must be introduced through a new API version.
 
 Client applications must not independently reproduce authoritative backend business rules.
 
-## 17. Implementation Status
+## 18. Implementation Status
 
 This document defines the intended API contract.
 

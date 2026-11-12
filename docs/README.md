@@ -32,6 +32,9 @@ They serve as shared references for all applications and integrations.
 ### Architecture Decisions
 
 - [ADR 0001: Central API and Database Ownership](decisions/0001-central-api-and-database.md)
+- [ADR 0002: Account Lifecycle and Password Recovery](decisions/0002-account-lifecycle-and-password-recovery.md)
+- [ADR 0003: Resource Ownership and Data Isolation](decisions/0003-resource-ownership-and-isolation.md)
+- [ADR 0004: Audit Visibility and Retention](decisions/0004-audit-visibility-and-retention.md)
 
 ## Documentation Principles
 
