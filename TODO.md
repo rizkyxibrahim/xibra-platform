@@ -100,7 +100,7 @@ A documented requirement is not considered implemented until the corresponding c
 ### Database Implementation
 
 - [x] Design the initial multi-user database schema.
-- [x] Create new migrations without modifying applied migrations unnecessarily.
+- [!] Create new migrations without modifying applied migrations unnecessarily.
 - [x] Extend the users table with approved identity fields.
 - [x] Create roles and permissions tables.
 - [x] Create role assignment relationships.
@@ -120,14 +120,14 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Implement authentication middleware.
 - [x] Implement role-based authorization.
 - [x] Implement permission checks.
-- [ ] Implement account deactivation and reactivation (ADR 0002).
-- [ ] Implement Owner-only user administration listing.
+- [x] Implement account deactivation and reactivation (ADR 0002).
+- [x] Implement Owner-only user administration listing.
 - [ ] Implement resource ownership policies.
 - [ ] Prevent unauthorized ownership reassignment.
 - [x] Implement login rate limiting.
 - [ ] Implement email verification for optional email addresses.
-- [ ] Implement secure password recovery.
-- [ ] Implement audit and onboarding-attempt read endpoints (ADR 0004).
+- [~] Implement secure password recovery.
+- [x] Implement audit and onboarding-attempt read endpoints (ADR 0004).
 - [ ] Design and implement Google OAuth connection foundation.
 - [ ] Test authentication and authorization boundaries.
 
@@ -143,6 +143,7 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Configure Laravel Pint.
 - [ ] Document API endpoint contracts.
 - [ ] Verify the API foundation.
+- [ ] Resolve the Pint summary crash ("View [summary] not found") or document the --format=json workaround.
 
 ---
 
@@ -168,11 +169,11 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Implement invitation validation.
 - [x] Implement invitation expiration checks.
 - [x] Implement one-time invitation redemption.
-- [x] Prevent replay and concurrent redemption.
+- [~] Prevent replay and concurrent redemption.
 - [x] Implement short-lived onboarding sessions.
 - [x] Track failed validation attempts separately.
 - [x] Test expired, revoked, and redeemed invitations.
-- [x] Test concurrent redemption behavior.
+- [~] Test concurrent redemption behavior.
 
 ### Account Onboarding
 
@@ -527,15 +528,11 @@ A documented requirement is not considered implemented until the corresponding c
 
 ## Current Development Focus
 
-**Phase 1–2 completion — account lifecycle, password recovery, and audit access**
+**Phase 1–2 completion — email verification, ownership policies, and verification gaps**
 
 Current priorities:
 
-1. Implement Owner-only account deactivation and reactivation, email verification, and the password reset flow (ADR 0002).
-2. Implement the Owner-wide and self-scoped audit endpoints and the retention prune command (ADR 0004).
-3. Implement the first owned resource with ownership policies and isolation tests (ADR 0003).
-4. Document the remaining implemented API endpoint contracts.
-
-Do not begin dependent application feature development until the central identity, authentication, authorization, ownership, and onboarding foundations are sufficiently defined and verified.
-
-The API project has already been initialized and its initial Laravel migrations have been applied. Do not repeat project initialization or destructive database setup without an explicit technical reason and owner approval.
+1. Implement email verification so self-service password recovery can be enabled (ADR 0002).
+2. Implement the first owned resource with ownership policies and two-user isolation tests (ADR 0003).
+3. Prove concurrent invitation redemption with parallel-process tests.
+4. Document the remaining implemented API endpoint contracts and update the Postman collection.
