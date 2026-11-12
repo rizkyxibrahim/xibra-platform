@@ -334,6 +334,11 @@ Supported invitation states:
 - `expired`
 - `revoked`
 
+The implemented onboarding flow uses two public endpoints:
+
+- `POST /api/v1/invitations/redeem` accepts `{ "secret": "<code or link token>" }` and opens a 15-minute, single-use onboarding session. Re-redeeming replaces the previous session.
+- `POST /api/v1/onboarding/complete` accepts the session token plus `name`, `username`, optional `email` and `phone`, `password`, and `device_name`; it creates the active account, assigns the invitation's role, and returns a Sanctum token.
+
 Invitation validation failures must return safe error messages without exposing sensitive invitation data.
 
 Passwords must never be collected through Telegram.

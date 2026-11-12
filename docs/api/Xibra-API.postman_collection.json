@@ -1,0 +1,947 @@
+{
+  "info": {
+    "_postman_id": "a3f7c2e1-4b6d-4e8a-9c2f-xibra-api-batch4",
+    "name": "Xibra Platform API",
+    "description": "Postman collection for the verified endpoints of **xibra-api** (Batches 1–5): health, authentication, Owner-only invitation management, and public invitation onboarding.\n\n## Setup\n\n1. Start the API: `php artisan serve` inside `D:\\Xibra-Platform\\xibra-api` (default base URL `http://127.0.0.1:8000`).\n2. In this collection's **Variables** tab, set `owner_password` to the value of `XIBRA_OWNER_PASSWORD` from `xibra-api/.env`.\n3. Run the collection in order (Collection Runner) — later requests depend on variables captured by earlier ones:\n   - `POST /auth/login` captures `access_token`\n   - `POST /invitations` captures `invitation_id`, `invitation_code`, `invitation_token`\n   - `POST /invitations/redeem` captures `onboarding_session_token`\n   - `POST /onboarding/complete` captures `onboarding_member_token` and `member_access_token`\n\n## Notes\n\n- The response contract for every endpoint is `{success, message, code, data, meta}` (`docs/api/conventions.md` §5). Clients should branch on `code`, not `message`.\n- A full run **creates one real invitation and revokes it** in the Invitations folder. The Onboarding folder **creates one real Member account and one redeemed invitation**; nothing is deleted. Skip the Onboarding folder if you do not want additional live accounts.\n- The Onboarding complete request derives a unique username and email per run (`member_<timestamp>`), so repeated runs do not collide.\n- Login rate limiting (5/min per identifier, 20/min per IP) and onboarding rate limiting (10/min per IP) are intentionally **not** exercised: triggering them would lock the run for a minute.\n- The member-forbidden check (403) uses the `member_access_token` captured by the Onboarding folder. If that folder is skipped, the variable is empty and the check gracefully falls back to asserting 401 UNAUTHENTICATED.\n- Invitation codes and tokens are returned exactly once, in the create response. The API stores only hashes.\n- All requests send `Content-Type: application/json` and expect JSON responses regardless of the Accept header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "owner_username",
+      "value": "rizkyxibrahim",
+      "type": "string"
+    },
+    {
+      "key": "owner_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_name",
+      "value": "postman",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "member_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invitation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invitation_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invitation_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "value": "",
+      "key": "onboarding_invitation_code",
+      "type": "string"
+    },
+    {
+      "value": "",
+      "key": "onboarding_session_token",
+      "type": "string"
+    },
+    {
+      "value": "",
+      "key": "onboarding_member_token",
+      "type": "string"
+    },
+    {
+      "value": "",
+      "key": "onboarding_username",
+      "type": "string"
+    },
+    {
+      "value": "",
+      "key": "onboarding_email",
+      "type": "string"
+    },
+    {
+      "value": "Xibra-Onboarding-2026",
+      "key": "onboarding_password",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health",
+      "item": [
+        {
+          "name": "GET /api/v1/health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/health",
+            "description": "Public liveness probe. Expects HTTP 200 with code HEALTHY."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"envelope: success is true\", () => pm.expect(res.success).to.eql(true));",
+                  "pm.test(\"code is HEALTHY\", () => pm.expect(res.code).to.eql(\"HEALTHY\"));",
+                  "pm.test(\"envelope has all five keys\", () => {",
+                  "    [\"success\", \"message\", \"code\", \"data\", \"meta\"].forEach(k => pm.expect(res).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Auth",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/login (owner)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{owner_username}}\",\n  \"password\": \"{{owner_password}}\",\n  \"device_name\": \"{{device_name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "Authenticate with any of the three identifiers (username, email, phone) in the `identifier` field. On success, captures `data.token` into the `access_token` collection variable. Rate limited: 5/min per identifier, 20/min per IP."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"envelope: success is true\", () => pm.expect(res.success).to.eql(true));",
+                  "pm.test(\"code is AUTHENTICATED\", () => pm.expect(res.code).to.eql(\"AUTHENTICATED\"));",
+                  "pm.test(\"token is returned\", () => pm.expect(res.data.token).to.be.a(\"string\").and.not.empty);",
+                  "pm.test(\"owner role is present\", () => pm.expect(res.data.user.roles.map(r => r.name)).to.include(\"owner\"));",
+                  "pm.test(\"no password material in the user payload\", () => pm.expect(res.data.user).to.not.have.property(\"password\"));",
+                  "",
+                  "pm.collectionVariables.set(\"access_token\", res.data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/auth/me",
+            "description": "The authenticated identity, resolved from the bearer token only. Expects HTTP 200 with code USER_RETRIEVED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is USER_RETRIEVED\", () => pm.expect(res.code).to.eql(\"USER_RETRIEVED\"));",
+                  "pm.test(\"identity matches the login identifier\", () => pm.expect(res.data.username).to.eql(pm.collectionVariables.get(\"owner_username\")));",
+                  "pm.test(\"roles are exposed\", () => pm.expect(res.data.roles).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/logout",
+            "description": "Revokes the token used for the request. Expects HTTP 200 with code LOGGED_OUT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is LOGGED_OUT\", () => pm.expect(res.code).to.eql(\"LOGGED_OUT\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/auth/me (revoked token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/auth/me",
+            "description": "Repeats /auth/me with the token revoked by the previous request. Expects HTTP 401 with code UNAUTHENTICATED — proof that logout really revoked the token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"envelope: success is false\", () => pm.expect(res.success).to.eql(false));",
+                  "pm.test(\"code is UNAUTHENTICATED\", () => pm.expect(res.code).to.eql(\"UNAUTHENTICATED\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/auth/login (again, restore session)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{owner_username}}\",\n  \"password\": \"{{owner_password}}\",\n  \"device_name\": \"{{device_name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "Logs in again so the later folders have a valid bearer token. Captures a fresh access_token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is AUTHENTICATED\", () => pm.expect(res.code).to.eql(\"AUTHENTICATED\"));",
+                  "",
+                  "pm.collectionVariables.set(\"access_token\", res.data.token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Invitations (Owner only)",
+      "item": [
+        {
+          "name": "GET /api/v1/invitations (list)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations?page=1&per_page=15",
+            "description": "Paginated invitation listing, newest first. Requires the `invitations.manage` permission (owner role). Pagination metadata lives in `meta` per docs §10: current_page, per_page, total, last_page. `per_page` max is 100."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is INVITATIONS_RETRIEVED\", () => pm.expect(res.code).to.eql(\"INVITATIONS_RETRIEVED\"));",
+                  "pm.test(\"data is an array\", () => pm.expect(res.data).to.be.an(\"array\"));",
+                  "pm.test(\"pagination meta is present\", () => {",
+                  "    pm.expect(res.meta).to.be.an(\"object\");",
+                  "    [\"current_page\", \"per_page\", \"total\", \"last_page\"].forEach(k => pm.expect(res.meta).to.have.property(k));",
+                  "});",
+                  "pm.test(\"stored hashes are never exposed\", () => {",
+                  "    if (res.data.length > 0) {",
+                  "        pm.expect(res.data[0]).to.not.have.property(\"code_hash\");",
+                  "        pm.expect(res.data[0]).to.not.have.property(\"token_hash\");",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/invitations (create)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expires_in_hours\": 24,\n  \"note\": \"Created via Postman\",\n  \"role\": \"member\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Creates an invitation and returns its one-time secrets. `expires_in_hours` is optional (default 24, bounds 1–72), `role` is optional (default member, `owner` is rejected), `note` is optional (max 1000 chars). The code and token in `data.secrets` are the only copies that will ever exist — the database stores hashes. Each run of this request creates a real invitation; the run revokes it later in this folder."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is INVITATION_CREATED\", () => pm.expect(res.code).to.eql(\"INVITATION_CREATED\"));",
+                  "pm.test(\"invitation is pending with the member role\", () => {",
+                  "    pm.expect(res.data.invitation.status).to.eql(\"pending\");",
+                  "    pm.expect(res.data.invitation.role.name).to.eql(\"member\");",
+                  "});",
+                  "pm.test(\"one-time code has the documented format\", () => {",
+                  "    pm.expect(res.data.secrets.code).to.match(/^XIBRA-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);",
+                  "    pm.expect(res.data.secrets.token).to.have.lengthOf(48);",
+                  "});",
+                  "pm.test(\"no secret hashes in the invitation payload\", () => {",
+                  "    pm.expect(res.data.invitation).to.not.have.property(\"code_hash\");",
+                  "    pm.expect(res.data.invitation).to.not.have.property(\"token_hash\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"invitation_id\", res.data.invitation.id);",
+                  "pm.collectionVariables.set(\"invitation_code\", res.data.secrets.code);",
+                  "pm.collectionVariables.set(\"invitation_token\", res.data.secrets.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/invitations/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations/{{invitation_id}}",
+            "description": "Single invitation. The `status` is the effective one: an overdue pending invitation reports `expired` even before the hourly sweeper materialises it. Unknown ids are concealed with a 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is INVITATION_RETRIEVED\", () => pm.expect(res.code).to.eql(\"INVITATION_RETRIEVED\"));",
+                  "pm.test(\"returns the created invitation\", () => pm.expect(res.data.id).to.eql(Number(pm.collectionVariables.get(\"invitation_id\"))));",
+                  "pm.test(\"no secret hashes in payload\", () => {",
+                  "    pm.expect(res.data).to.not.have.property(\"code_hash\");",
+                  "    pm.expect(res.data).to.not.have.property(\"token_hash\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/invitations/{id}/revoke",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/invitations/{{invitation_id}}/revoke",
+            "description": "Revokes an unused (pending) invitation. Revoked invitations can never be redeemed. Expects HTTP 200 with code INVITATION_REVOKED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is INVITATION_REVOKED\", () => pm.expect(res.code).to.eql(\"INVITATION_REVOKED\"));",
+                  "pm.test(\"status is revoked with a revoker recorded\", () => {",
+                  "    pm.expect(res.data.status).to.eql(\"revoked\");",
+                  "    pm.expect(res.data.revoked_by).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/invitations/{id}/revoke (conflict)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/invitations/{{invitation_id}}/revoke",
+            "description": "Repeats the revoke on the now-revoked invitation. Only pending invitations can be revoked: expects HTTP 409 with code INVITATION_NOT_REVOKABLE."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"envelope: success is false\", () => pm.expect(res.success).to.eql(false));",
+                  "pm.test(\"code is INVITATION_NOT_REVOKABLE\", () => pm.expect(res.code).to.eql(\"INVITATION_NOT_REVOKABLE\"));",
+                  "pm.test(\"data and meta are null\", () => {",
+                  "    pm.expect(res.data).to.eql(null);",
+                  "    pm.expect(res.meta).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Onboarding (public)",
+      "item": [
+        {
+          "name": "POST /api/v1/invitations (create onboarding invitation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expires_in_hours\": 24,\n  \"note\": \"Created via Postman onboarding\",\n  \"role\": \"member\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Creates a dedicated pending invitation for the onboarding flow and captures its one-time code. Uses the Owner token from the Auth folder."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is INVITATION_CREATED\", () => pm.expect(res.code).to.eql(\"INVITATION_CREATED\"));",
+                  "pm.test(\"invitation is pending with the member role\", () => {",
+                  "    pm.expect(res.data.invitation.status).to.eql(\"pending\");",
+                  "    pm.expect(res.data.invitation.role.name).to.eql(\"member\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"onboarding_invitation_code\", res.data.secrets.code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/invitations/redeem (public)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"secret\": \"{{onboarding_invitation_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/invitations/redeem",
+            "description": "Validates the invitation code and opens a short-lived (15 minute, single-use) onboarding session. Returns the raw session token exactly once; the database stores only its hash. Expects HTTP 201 with code ONBOARDING_SESSION_CREATED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is ONBOARDING_SESSION_CREATED\", () => pm.expect(res.code).to.eql(\"ONBOARDING_SESSION_CREATED\"));",
+                  "pm.test(\"session token is 48 characters\", () => pm.expect(res.data.session_token).to.have.lengthOf(48));",
+                  "pm.test(\"role and invitation expiry are exposed, internals are not\", () => {",
+                  "    pm.expect(res.data.invitation.role.name).to.eql(\"member\");",
+                  "    pm.expect(res.data.invitation).to.not.have.property(\"id\");",
+                  "    pm.expect(res.data.invitation).to.not.have.property(\"note\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"onboarding_session_token\", res.data.session_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/onboarding/complete (public)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_token\": \"{{onboarding_session_token}}\",\n  \"name\": \"Postman Onboarding Member\",\n  \"username\": \"{{onboarding_username}}\",\n  \"email\": \"{{onboarding_email}}\",\n  \"password\": \"{{onboarding_password}}\",\n  \"device_name\": \"postman-onboarding\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/onboarding/complete",
+            "description": "Validates the single-use onboarding session and identity, creates an active Member account, marks the invitation redeemed, consumes every session for it, and returns the first Sanctum token. The username and email are made unique per run. Expects HTTP 201 with code ACCOUNT_CREATED. NOTE: this creates a real account."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString(36);",
+                  "pm.collectionVariables.set(\"onboarding_username\", \"member_\" + suffix);",
+                  "pm.collectionVariables.set(\"onboarding_email\", \"member_\" + suffix + \"@example.test\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"code is ACCOUNT_CREATED\", () => pm.expect(res.code).to.eql(\"ACCOUNT_CREATED\"));",
+                  "pm.test(\"account is active with the member role\", () => {",
+                  "    pm.expect(res.data.user.is_active).to.eql(true);",
+                  "    pm.expect(res.data.user.roles[0].name).to.eql(\"member\");",
+                  "    pm.expect(res.data.user.username).to.eql(pm.collectionVariables.get(\"onboarding_username\"));",
+                  "});",
+                  "pm.test(\"a Sanctum token is returned\", () => pm.expect(res.data.token).to.be.a(\"string\").and.not.empty);",
+                  "",
+                  "pm.collectionVariables.set(\"onboarding_member_token\", res.data.token);",
+                  "pm.collectionVariables.set(\"member_access_token\", res.data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/auth/me (onboarding member)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "value": "{{onboarding_member_token}}",
+                  "key": "token",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/auth/me",
+            "description": "Resolves the newly onboarded Member from its returned token. Expects HTTP 200 with code USER_RETRIEVED and the member role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"code is USER_RETRIEVED\", () => pm.expect(res.code).to.eql(\"USER_RETRIEVED\"));",
+                  "pm.test(\"token resolves the new member\", () => {",
+                  "    pm.expect(res.data.username).to.eql(pm.collectionVariables.get(\"onboarding_username\"));",
+                  "    pm.expect(res.data.is_active).to.eql(true);",
+                  "    pm.expect(res.data.roles[0].name).to.eql(\"member\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/invitations (onboarding member, forbidden)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "value": "{{onboarding_member_token}}",
+                  "key": "token",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Authorization boundary for the freshly onboarded Member: invitation management requires `invitations.manage`. Expects HTTP 403 with code FORBIDDEN."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"code is FORBIDDEN\", () => pm.expect(res.code).to.eql(\"FORBIDDEN\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Error and security checks",
+      "item": [
+        {
+          "name": "GET /api/v1/invitations (guest)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Invitation endpoints without a token. Expects HTTP 401 with code UNAUTHENTICATED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"code is UNAUTHENTICATED\", () => pm.expect(res.code).to.eql(\"UNAUTHENTICATED\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/invitations (member, forbidden)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{member_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Authorization boundary: a valid Member token must receive HTTP 403 with code FORBIDDEN. The token is captured by the Onboarding folder; if that folder was skipped, the variable is empty and this falls back to asserting 401 UNAUTHENTICATED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const memberToken = pm.collectionVariables.get(\"member_access_token\");",
+                  "",
+                  "if (memberToken) {",
+                  "    pm.test(\"HTTP 403 FORBIDDEN for members\", () => {",
+                  "        pm.response.to.have.status(403);",
+                  "        pm.expect(res.code).to.eql(\"FORBIDDEN\");",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"no member token configured yet (expected 401)\", () => {",
+                  "        pm.response.to.have.status(401);",
+                  "        pm.expect(res.code).to.eql(\"UNAUTHENTICATED\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/invitations/999999 (concealed)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations/999999",
+            "description": "Unknown invitation ids are concealed as a plain 404. Expects code NOT_FOUND."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code is NOT_FOUND\", () => pm.expect(res.code).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/invitations (owner role rejected)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"owner\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/invitations",
+            "description": "Invitations can never assign the owner role — the owner account is exclusively provisioned by the bootstrap seeder. Expects HTTP 422 with a specific message in meta.errors.role, and no invitation is created."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"code is VALIDATION_ERROR\", () => pm.expect(res.code).to.eql(\"VALIDATION_ERROR\"));",
+                  "pm.test(\"owner role is explicitly rejected\", () => pm.expect(res.meta.errors.role).to.include(\"The owner role cannot be assigned through an invitation.\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/invitations?per_page=101 (bound)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/invitations?per_page=101",
+            "description": "Page size is capped at 100. Expects HTTP 422 with meta.errors.per_page."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"code is VALIDATION_ERROR\", () => pm.expect(res.code).to.eql(\"VALIDATION_ERROR\"));",
+                  "pm.test(\"per_page error is reported\", () => pm.expect(res.meta.errors).to.have.property(\"per_page\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/auth/login (empty body)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "Field-level validation failures return HTTP 422 with the errors in meta.errors."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"code is VALIDATION_ERROR\", () => pm.expect(res.code).to.eql(\"VALIDATION_ERROR\"));",
+                  "pm.test(\"field-level errors in meta\", () => {",
+                  "    [\"identifier\", \"password\", \"device_name\"].forEach(k => pm.expect(res.meta.errors).to.have.property(k));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/unknown (route miss)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/unknown",
+            "description": "Unmatched API routes still return the standard JSON envelope. Expects HTTP 404 with code NOT_FOUND."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"code is NOT_FOUND\", () => pm.expect(res.code).to.eql(\"NOT_FOUND\"));",
+                  "pm.test(\"data is null\", () => pm.expect(res.data).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
