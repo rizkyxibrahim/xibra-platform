@@ -73,18 +73,18 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Verify migration status.
 - [x] Establish the API project README.
 - [x] Establish API-specific Claude instructions.
-- [ ] Review the current API implementation and Git state.
-- [ ] Establish API versioning conventions.
-- [ ] Finalize the standard JSON response format.
-- [ ] Review exception handling.
+- [x] Review the current API implementation and Git state.
+- [x] Establish API versioning conventions.
+- [x] Finalize the standard JSON response format.
+- [x] Review exception handling.
 - [ ] Review CORS configuration.
-- [ ] Verify the health endpoint.
-- [ ] Verify the API foundation with automated tests.
+- [x] Verify the health endpoint.
+- [x] Verify the API foundation with automated tests.
 
 ### Core Multi-User Architecture
 
 - [ ] Finalize the Core Multi-User ERD.
-- [ ] Review existing Laravel migrations and database tables.
+- [x] Review existing Laravel migrations and database tables.
 - [ ] Define the user identity and account model.
 - [ ] Define username, email, and phone login identifiers.
 - [ ] Define the initial Owner provisioning process.
@@ -100,40 +100,40 @@ A documented requirement is not considered implemented until the corresponding c
 ### Database Implementation
 
 - [ ] Design the initial multi-user database schema.
-- [ ] Create new migrations without modifying applied migrations unnecessarily.
-- [ ] Extend the users table with approved identity fields.
-- [ ] Create roles and permissions tables.
-- [ ] Create role assignment relationships.
-- [ ] Create initial reference seeders.
-- [ ] Implement controlled Owner provisioning.
-- [ ] Create the initial Member role seeder.
+- [x] Create new migrations without modifying applied migrations unnecessarily.
+- [x] Extend the users table with approved identity fields.
+- [x] Create roles and permissions tables.
+- [x] Create role assignment relationships.
+- [x] Create initial reference seeders.
+- [x] Implement controlled Owner provisioning.
+- [x] Create the initial Member role seeder.
 - [ ] Review foreign keys and indexes.
 - [ ] Verify clean migration and seeding.
 - [ ] Verify existing database data is protected.
 
 ### Authentication and Authorization
 
-- [ ] Implement username, email, and phone login.
-- [ ] Implement logout and token revocation.
-- [ ] Implement authenticated user retrieval.
-- [ ] Apply HasApiTokens to the User model.
-- [ ] Implement authentication middleware.
-- [ ] Implement role-based authorization.
-- [ ] Implement permission checks.
+- [x] Implement username, email, and phone login.
+- [x] Implement logout and token revocation.
+- [x] Implement authenticated user retrieval.
+- [x] Apply HasApiTokens to the User model.
+- [x] Implement authentication middleware.
+- [x] Implement role-based authorization.
+- [x] Implement permission checks.
 - [ ] Implement resource ownership policies.
 - [ ] Prevent unauthorized ownership reassignment.
-- [ ] Implement login rate limiting.
+- [x] Implement login rate limiting.
 - [ ] Implement secure password recovery.
 - [ ] Test authentication and authorization boundaries.
 
 ### API Quality
 
-- [ ] Implement consistent API response handling.
-- [ ] Implement request validation.
-- [ ] Implement API Resources where appropriate.
-- [ ] Add feature tests.
-- [ ] Add authentication tests.
-- [ ] Add authorization tests.
+- [x] Implement consistent API response handling.
+- [x] Implement request validation.
+- [x] Implement API Resources where appropriate.
+- [x] Add feature tests.
+- [x] Add authentication tests.
+- [x] Add authorization tests.
 - [ ] Add multi-user ownership isolation tests.
 - [ ] Configure Laravel Pint.
 - [ ] Document API endpoint contracts.
@@ -145,40 +145,40 @@ A documented requirement is not considered implemented until the corresponding c
 
 ### Invitation Management
 
-- [ ] Finalize invitation database design.
-- [ ] Implement invitation migrations.
-- [ ] Implement invitation code generation.
-- [ ] Implement invitation link token generation.
-- [ ] Store invitation secrets as cryptographic hashes.
-- [ ] Implement configurable invitation expiration.
-- [ ] Enforce the 1-hour minimum and 72-hour maximum.
-- [ ] Set the default invitation expiration to 24 hours.
-- [ ] Implement invitation status management.
-- [ ] Implement invitation revocation.
-- [ ] Implement Owner-only invitation authorization.
-- [ ] Implement invitation audit records.
+- [x] Finalize invitation database design.
+- [x] Implement invitation migrations.
+- [x] Implement invitation code generation.
+- [x] Implement invitation link token generation.
+- [x] Store invitation secrets as cryptographic hashes.
+- [x] Implement configurable invitation expiration.
+- [x] Enforce the 1-hour minimum and 72-hour maximum.
+- [x] Set the default invitation expiration to 24 hours.
+- [x] Implement invitation status management.
+- [x] Implement invitation revocation.
+- [x] Implement Owner-only invitation authorization.
+- [x] Implement invitation audit records.
 
 ### Secure Redemption
 
-- [ ] Implement invitation validation.
-- [ ] Implement invitation expiration checks.
-- [ ] Implement one-time invitation redemption.
-- [ ] Prevent replay and concurrent redemption.
-- [ ] Implement short-lived onboarding sessions.
-- [ ] Track failed validation attempts separately.
-- [ ] Test expired, revoked, and redeemed invitations.
-- [ ] Test concurrent redemption behavior.
+- [x] Implement invitation validation.
+- [x] Implement invitation expiration checks.
+- [x] Implement one-time invitation redemption.
+- [x] Prevent replay and concurrent redemption.
+- [x] Implement short-lived onboarding sessions.
+- [x] Track failed validation attempts separately.
+- [x] Test expired, revoked, and redeemed invitations.
+- [x] Test concurrent redemption behavior.
 
 ### Account Onboarding
 
-- [ ] Design the onboarding API contract.
-- [ ] Implement secure account creation.
-- [ ] Assign the default Member role.
-- [ ] Implement onboarding session validation.
-- [ ] Implement account activation.
-- [ ] Prevent duplicate account creation.
-- [ ] Verify successful invitation redemption.
-- [ ] Test the complete onboarding lifecycle.
+- [x] Design the onboarding API contract.
+- [x] Implement secure account creation.
+- [x] Assign the default Member role.
+- [x] Implement onboarding session validation.
+- [x] Implement account activation.
+- [x] Prevent duplicate account creation.
+- [x] Verify successful invitation redemption.
+- [x] Test the complete onboarding lifecycle.
 
 ### Telegram Identity Linking
 
@@ -520,16 +520,15 @@ A documented requirement is not considered implemented until the corresponding c
 
 ## Current Development Focus
 
-**Phase 0 — Workspace Documentation and Architecture Alignment**
+**Phase 2 — Invitation and Account Onboarding**
 
 Current priorities:
 
-1. Audit and align all workspace documentation.
-2. Review the API-specific architecture instructions.
-3. Finalize the multi-user architecture and invitation specification.
-4. Finalize the Core Multi-User ERD.
-5. Review existing API migrations and database state.
-6. Continue Core Multi-User API implementation.
+1. Define the bot-to-API service authentication mechanism.
+2. Implement Telegram identity linking with per-user isolation.
+3. Add resource ownership policies and isolation tests.
+4. Document the implemented API endpoint contracts.
+5. Review foreign keys, indexes, and clean migration/seeding verification.
 
 Do not begin dependent application feature development until the central identity, authentication, authorization, ownership, and onboarding foundations are sufficiently defined and verified.
 
