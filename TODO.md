@@ -122,7 +122,7 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Implement permission checks.
 - [x] Implement account deactivation and reactivation (ADR 0002).
 - [x] Implement Owner-only user administration listing.
-- [ ] Implement resource ownership policies.
+- [~] Implement resource ownership policies. (Projects implemented; apply the same pattern to each future owned resource.)
 - [ ] Prevent unauthorized ownership reassignment.
 - [x] Implement login rate limiting.
 - [x] Implement email verification for optional email addresses.
@@ -139,7 +139,7 @@ A documented requirement is not considered implemented until the corresponding c
 - [x] Add feature tests.
 - [x] Add authentication tests.
 - [x] Add authorization tests.
-- [ ] Add multi-user ownership isolation tests.
+- [~] Add multi-user ownership isolation tests. (Projects covered; Telegram identity and link-code isolation still pending.)
 - [x] Configure Laravel Pint.
 - [ ] Document API endpoint contracts.
 - [ ] Verify the API foundation.
@@ -305,22 +305,22 @@ A documented requirement is not considered implemented until the corresponding c
 
 ### Foundation
 
-- [ ] Initialize Node.js and TypeScript project.
-- [ ] Configure environment variables.
-- [ ] Configure Telegram Bot API.
-- [ ] Establish a reusable API client.
-- [ ] Implement authenticated bot-to-API communication.
-- [ ] Implement secure user identification.
+- [x] Initialize Node.js and TypeScript project.
+- [x] Configure environment variables.
+- [x] Configure Telegram Bot API.
+- [x] Establish a reusable API client.
+- [x] Implement authenticated bot-to-API communication.
+- [x] Implement secure user identification.
 - [ ] Implement account onboarding integration.
-- [ ] Implement Telegram account linking.
-- [ ] Implement structured logging.
-- [ ] Implement error handling.
+- [x] Implement Telegram account linking.
+- [~] Implement structured logging.
+- [x] Implement error handling.
 
 ### Initial Features
 
-- [ ] Start and help commands.
-- [ ] Account information.
-- [ ] Invitation management for Owner.
+- [x] Start and help commands.
+- [x] Account information.
+- [~] Invitation management for Owner.
 - [ ] Task management.
 - [ ] Schedule information.
 - [ ] Reminder management.
@@ -532,7 +532,7 @@ A documented requirement is not considered implemented until the corresponding c
 
 Current priorities:
 
-1. Implement email verification so self-service password recovery can be enabled (ADR 0002).
-2. Implement the first owned resource with ownership policies and two-user isolation tests (ADR 0003).
-3. Prove concurrent invitation redemption with parallel-process tests.
-4. Document the remaining implemented API endpoint contracts and update the Postman collection.
+1. [x] Email verification (ADR 0005) implemented and verified.
+2. [x] First owned resource `projects` with ownership policy and two-user isolation tests (ADR 0003). Verified: 257 tests passing.
+3. [ ] Prove concurrent invitation redemption with parallel-process tests.
+4. [ ] Document the remaining implemented API endpoint contracts, including `/projects`, and update the Postman collection.
