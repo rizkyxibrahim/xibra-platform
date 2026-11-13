@@ -125,8 +125,8 @@ A documented requirement is not considered implemented until the corresponding c
 - [ ] Implement resource ownership policies.
 - [ ] Prevent unauthorized ownership reassignment.
 - [x] Implement login rate limiting.
-- [ ] Implement email verification for optional email addresses.
-- [~] Implement secure password recovery.
+- [x] Implement email verification for optional email addresses.
+- [x] Implement secure password recovery.
 - [x] Implement audit and onboarding-attempt read endpoints (ADR 0004).
 - [ ] Design and implement Google OAuth connection foundation.
 - [ ] Test authentication and authorization boundaries.
